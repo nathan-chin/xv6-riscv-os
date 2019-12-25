@@ -10,6 +10,7 @@ This course teaches on the design and implementation of operating systems, and t
 In an attempt to re-learn important operating system topics, I will be completing the labs for the MIT course, 6.S081, as described on their [course website](https://pdos.csail.mit.edu/6.828/2019/overview.html). These labs will be completed on my own, and tested with the provided scripts. VirtualBox was used to provide a Linux Mint environment for development on a Windows machine.
 
 ## What is completed:
+The labs will progressively build up the xv6, but functionality is separated per lab in branches. Functionality is not needed between labs, as they are fairly independent of each other, but all changes will be merged onto the `master` branch.
 - [ ] Lab Utilities
 - [ ] Lab Shell
 - [ ] Lab Allocator
