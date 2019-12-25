@@ -25,7 +25,8 @@ In an attempt to re-learn important operating system topics, I will be completin
 I am claiming no credit for my own except for the implementations of the labs listed on the course website (linked above). Thanks to MIT 6.S081/6.828 for providing the resources to getting me started.
 
 ## Useful commands
-`grep -R --include="*.file_type1" --include="*.file_type2" "pattern to search"
-.` = searches recursively in current directory through all files of type 1 and 2
+- `grep -R --include="*.file_type1" --include="*.file_type2" "pattern to search"
+.`: searches recursively in current directory through all files of type 1 and 2
 to match pattern specified.
-`Ctrl-A X = quits the running QEMU`
+
+- `Ctrl-A X`: quits the running QEMU
