@@ -50,6 +50,8 @@ Pipes have at least four advantages over temporary files.
 3. Pipes allow for parallel execution of pipeline stages, while files require sequential execution
 4. In inter-process communication, pipes block execution more efficienty with reads/writes
 
+The [following link](http://web.cse.ohio-state.edu/~mamrak.1/CIS762/pipes_lab_notes.html) includes a deeper explanation of pipes and file descriptors.
+
 ## 1.4 File System
 The xv6 file system provides data files, which are uniterrupted byte arrays, and directories, which contain named references to data files and other directoories. Directories form a tree, starting at a special one called _root_.
 
