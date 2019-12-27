@@ -3,23 +3,6 @@
 #include "user/user.h"
 #include "kernel/fs.h"
 
-/**
- * I understand that there is a function "strncmp" already created but this
- * function correctly compares for different lengths
- */
-int
-cmpName(char *a, char *b)
-{
-  while (*a != '\0') {
-    if (*a < *b) return -1;
-    if (*a > *b) return 1;
-    a++;
-    b++;
-  }
-  if (*b != '\0') return -1;
-  return 0;
-}
-
 char*
 fmtname(char *path)
 {
@@ -65,7 +48,7 @@ searchDir(char *path, char *buf, int fd, struct stat st, char *search)
     }
     // Only look for files - search through DIRs and ignore CONSOLEs
     if (st.type == T_DIR) {
-      if (cmpName(fmtname(buf), ".") != 0 && cmpName(fmtname(buf), "..") != 0) {
+      if (strcmp(fmtname(buf), ".") != 0 && strcmp(fmtname(buf), "..") != 0) {
         // Get new metadata for directory file
         int fd2 = open(buf, 0);
         // Path must have stats
@@ -79,7 +62,7 @@ searchDir(char *path, char *buf, int fd, struct stat st, char *search)
         close(fd2);
       }
     } else if (st.type == T_FILE) {
-      if (cmpName(fmtname(buf), search) == 0) {
+      if (strcmp(fmtname(buf), search) == 0) {
         printf("%s\n", buf);
       }
     }
