@@ -30,3 +30,7 @@ I am claiming no credit for my own except for the implementations of the labs li
 to match pattern specified.
 
 - `Ctrl-A X`: quits the running QEMU
+
+## Helpful links
+- [Great explanation about arrays of strings in
+  C](https://stackoverflow.com/questions/8824057/pointer-to-string-array-in-c)
