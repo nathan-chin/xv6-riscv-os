@@ -4,47 +4,6 @@
 #include "kernel/fs.h"
 #include "kernel/param.h"
 
-char*
-fmtname(char *path)
-{
-  static char buf[DIRSIZ+1];
-  char *p;
-
-  // Find first character after last slash.
-  for(p=path+strlen(path); p >= path && *p != '/'; p--)
-    ;
-  p++;
-
-  // Return name, ended with a null character
-  if(strlen(p) >= DIRSIZ)
-    return p;
-  memmove(buf, p, strlen(p));
-  memset(buf+strlen(p), '\0', DIRSIZ-strlen(p));
-  return buf;
-}
-
-void
-find(char *path, char *search)
-{
-  int fd; // Fd of path passed in
-  struct stat st; // Details about path
-
-  // Path must be a directory
-  if((fd = open(path, 0)) < 0){
-    fprintf(2, "find: cannot open %s\n", path);
-    return;
-  }
-
-  // Path must have stats
-  if(fstat(fd, &st) < 0){
-    fprintf(2, "find: cannot stat %s\n", path);
-    close(fd);
-    return;
-  }
-
-  close(fd);
-}
-
 int
 main(int argc, char *argv[])
 {
@@ -55,6 +14,7 @@ main(int argc, char *argv[])
   char *args[MAXARG]; // Array of new argument strings
   char **argsPtr = args; // Point to array of strings
   int n = 0; // Number of total arguments with new
+  int orig = 0; // Number of original args
 
   // Copy over current argv to newArgs
   while (argv[n+1]) {
@@ -62,40 +22,34 @@ main(int argc, char *argv[])
     argsPtr[n] = (char *)malloc(sizeof(char) * (MAXSTR)); 
     strcpy(argsPtr[n], argv[n+1]);
     n++;
+    orig++;
   }
 
   // Read all chars from STDIN into c
   while (read(0, c, 1) > 0) {
-    if (*c == '\n') { // End of line, add new arg then exec
-      if (fork() == 0) { // Child process execs
-        // Add new arg to array of strings
-        *bufPtr = '\0';
-        argsPtr[n] = (char *)malloc(sizeof(char) * (MAXSTR)); 
-        strcpy(argsPtr[n], buf);
-        n++;
-  
-        printf("Starting\n");
-        int i = 0;
-        while (argsPtr[i]) {
-          printf("argsPtr: %s\n", argsPtr[i]);
-          i++;
-        }
-        printf("Done\n");
+    if (*c == '\n') { // End of line
+      // Add new arg to array of strings
+      *bufPtr = '\0';
+      argsPtr[n] = (char *)malloc(sizeof(char) * (MAXSTR)); 
+      strcpy(argsPtr[n], buf);
+      n++;
 
+      if (fork() == 0) { // Child process execs     
         // Exec with new arguments
-        printf("Starting exec\n");
         if (exec(argv[1], argsPtr) < 0) {
           printf("%s: exec failed in xargs\n", argv[1]);
         }
       } else {
         wait(0); // Wait for child exec to finish
-        // Release all malloc'ed memory
-        while (--n > 0) {
+
+        // Release all malloc'ed memory for commands on this line of exec
+        while (--n >= orig) {
+          *argsPtr[n] = '\0';
           free(argsPtr[n]);
         }
-        // n should be 1 again to not write over the command
-        n = 1;
-        memset(buf, '\0', sizeof buf);
+
+        // Reset n to not write over the initial args
+        n = orig;
         bufPtr = buf; // Reset bufPtr to reuse buffer
       }
     } else if (*c == ' ') { // End of arg
@@ -110,6 +64,9 @@ main(int argc, char *argv[])
       bufPtr++;
     }
   }
-  free(argsPtr[0]); // Finally free 0 before exiting
+  // Finally free original args before exiting
+  while (--orig >= 0) {
+    free(argsPtr[orig]);
+  }
   exit(0);
 }
