@@ -11,7 +11,7 @@ In an attempt to re-learn important operating system topics, I will be completin
 
 ## What is completed:
 The labs will progressively build up the xv6, but functionality is separated per lab in branches. Functionality is not needed between labs, as they are fairly independent of each other, but all changes will be merged onto the `master` branch.
-- [ ] Lab Utilities
+- [x] Lab Utilities
 - [ ] Lab Shell
 - [ ] Lab Allocator
 - [ ] Lab Lazy allocation
