@@ -48,97 +48,68 @@ find(char *path, char *search)
 int
 main(int argc, char *argv[])
 {
-  /*
-  int i;
-
-  if(argc < 2){
-    printf("find: requires a file name to search for");
-  } else if (argc == 2) { // If no starting-point specified, '.' is assumed
-    find(".", argv[1]);
-  } else {
-    for (i = 2; i < argc; i++) {
-      find(argv[1], argv[i]);
-    }
-  }*/
-  /*
-  int i = 0;
-  while(argv[i]) {
-    printf("%s,", argv[i]);
-    i++;
-  }*/
-
-  char c[1];
-  char buf[512]; // Used for storing args in buffer
+  const int MAXSTR = 64; // Max length of a piped input
+  char c[1]; // Buffer for reading chars from STDIN
+  char buf[512]; // Buffer for storing strings taken from c
   char *bufPtr = buf; // Used for writing to buffer
-  //char newArgs[argc+1][64];
-  char **newArgs = (char **)malloc(sizeof(char *) * (MAXARG));
-  char *addArg;
-  char *strPtr = *newArgs + 1;
-  //int numArgs = argc;
+  char *args[MAXARG]; // Array of new argument strings
+  char **argsPtr = args; // Point to array of strings
+  int n = 0; // Number of total arguments with new
 
   // Copy over current argv to newArgs
-  int i = 1;
-  while (argv[i]) {
-    addArg = (char *)malloc(sizeof(char) * (strlen(argv[i])+1)); 
-    //printf("B|argv:%s, addargs:%s\n", argv[i], addArg);
-    strcpy(addArg, argv[i]);
-    //printf("A|argv:%s, addargs:%s\n", argv[i], addArg);
-    strcpy(strPtr, addArg);
-    //printf("strptr:%s\n", strPtr);
-    strPtr += strlen(addArg) + 1;
-    i++;
+  while (argv[n+1]) {
+    // Allocate space for string arg
+    argsPtr[n] = (char *)malloc(sizeof(char) * (MAXSTR)); 
+    strcpy(argsPtr[n], argv[n+1]);
+    n++;
   }
 
-  // While STDIN has more characters
+  // Read all chars from STDIN into c
   while (read(0, c, 1) > 0) {
     if (*c == '\n') { // End of line, add new arg then exec
-      //printf("Newline\n");
       if (fork() == 0) { // Child process execs
         // Add new arg to array of strings
         *bufPtr = '\0';
-        argc++;
-        addArg = (char *)malloc(sizeof(char) * (strlen(buf)+1)); 
-        strcpy(addArg, buf);
-        //printf("addnewargs:%s\n", addArg);
-        strcpy(strPtr, addArg);
-        //printf("strptr:%s\n", strPtr);
-        strPtr += strlen(addArg) + 1;
-
-        // Test to see contents of newArgs
-        /*
-        i = 1;
-        strPtr = *newArgs + 1;
-        while (i < argc) {
-          printf("%s,", strPtr);
-          strPtr += strlen(strPtr) + 1;
+        argsPtr[n] = (char *)malloc(sizeof(char) * (MAXSTR)); 
+        strcpy(argsPtr[n], buf);
+        n++;
+  
+        printf("Starting\n");
+        int i = 0;
+        while (argsPtr[i]) {
+          printf("argsPtr: %s\n", argsPtr[i]);
           i++;
         }
-        */
+        printf("Done\n");
 
         // Exec with new arguments
-        printf("Executing\n");
-        exec(argv[1], newArgs);
+        printf("Starting exec\n");
+        if (exec(argv[1], argsPtr) < 0) {
+          printf("%s: exec failed in xargs\n", argv[1]);
+        }
       } else {
-        wait(0);
+        wait(0); // Wait for child exec to finish
         // Release all malloc'ed memory
-        bufPtr = buf;
+        while (--n > 0) {
+          free(argsPtr[n]);
+        }
+        // n should be 1 again to not write over the command
+        n = 1;
+        memset(buf, '\0', sizeof buf);
+        bufPtr = buf; // Reset bufPtr to reuse buffer
       }
     } else if (*c == ' ') { // End of arg
         // Add new arg to array of strings
-        //printf("Space\n");
         *bufPtr = '\0';
-        argc++;
-        addArg = (char *)malloc(sizeof(char) * (strlen(buf)+1)); 
-        strcpy(addArg, buf);
-        //printf("addnewargs:%s\n", addArg);
-        strcpy(strPtr, addArg);
-        //printf("strptr:%s\n", strPtr);
-        strPtr += strlen(addArg) + 1;
-        bufPtr = buf;
+        argsPtr[n] = (char *)malloc(sizeof(char) * (MAXSTR)); 
+        strcpy(argsPtr[n], buf);
+        n++;
+        bufPtr = buf; // Reset bufPtr to reuse buffer
     } else { // Read one character
       *bufPtr = *c;
       bufPtr++;
     }
   }
+  free(argsPtr[0]); // Finally free 0 before exiting
   exit(0);
 }
