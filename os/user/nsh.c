@@ -69,28 +69,61 @@ main(void)
     }
   }
   */
+  #define START 0
+  #define CHAR 1
+  #define SPACE 2
+  #define NEWLINE 3
+  #define PIPE 4
+  #define REDIR_I 5
+  #define REDIR_O 6
 
   static char buf[80];
   memset(buf, 0, sizeof buf);
   printf("@ ");
-  gets(buf, sizeof buf);
-  printf("|%s|\n", buf);
+  gets(buf, sizeof buf); // Read in the input line into buf
+  buf[strlen(buf) - 1] = '\0'; // Remove the newline character at the end
+  //printf("|%s|\n", buf);
 
-  //char *line[MAXARG];
+  char *line[MAXARG];
 
-  int i = 0;
-  //int n = 0;
+  int prev = START;
+  int i = 0; // Keep track of position in buf
+  int n = 0; // Keep track of number of words made
+  //char *word;
+  //char *wordPtr = word;
   while (buf[i] != 0) {
     switch (buf[i]) {
       case ' ':
+        if (prev == SPACE || prev == NEWLINE) break;
+        prev = SPACE;
+        buf[i] = '\0';
+        break;
       case '\n':
+        if (prev == SPACE || prev == NEWLINE) break;
+        prev = NEWLINE;
+        break;
       case '|':
-      case '>':
+        prev = PIPE;
+        break;
       case '<':
+        prev = REDIR_I;
+        break;
+      case '>':
+        prev = REDIR_O;
+        break;
       default:
+        if (prev == CHAR) break;
+        line[n++] = &buf[i];
+        prev = CHAR;
     }
     i++;
   }
+  int g = 0;
+  while (line[g]) {
+    //printf("test: %s\n", line[g]);
+    g++;
+  }
+  exec(line[0], line);
   exit(0);
 }
 
