@@ -82,15 +82,14 @@ main(void)
   printf("@ ");
   gets(buf, sizeof buf); // Read in the input line into buf
   buf[strlen(buf) - 1] = '\0'; // Remove the newline character at the end
-  //printf("|%s|\n", buf);
 
   char *line[MAXARG];
 
   int prev = START;
   int i = 0; // Keep track of position in buf
   int n = 0; // Keep track of number of words made
-  //char *word;
-  //char *wordPtr = word;
+  //int p[2]; // Hold pipe fds
+  int file = 0; // Holds index of file name. + if output, - if input
   while (buf[i] != 0) {
     switch (buf[i]) {
       case ' ':
@@ -107,9 +106,11 @@ main(void)
         break;
       case '<':
         prev = REDIR_I;
+        file = n;
         break;
       case '>':
         prev = REDIR_O;
+        file = n;
         break;
       default:
         if (prev == CHAR) break;
@@ -123,7 +124,23 @@ main(void)
     //printf("test: %s\n", line[g]);
     g++;
   }
-  exec(line[0], line);
+  if (fork() == 0) {
+    if (file != 0) { // Redirection
+      if (file > 0) { // Output
+        int fd = open(line[file], O_CREATE|O_WRONLY);
+        close(1);
+        dup(fd);
+        for(; file < n; file++) {
+          line[file] = '\0';
+        }
+        exec(line[0], line);
+      }
+    } else {
+      exec(line[0], line);
+    }
+  } else {
+    wait(0);
+  }
   exit(0);
 }
 
