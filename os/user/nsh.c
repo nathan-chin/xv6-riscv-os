@@ -53,7 +53,7 @@ main(void)
           break;
         case '<':
           prev = REDIR_I;
-          file = n;
+          file = -n;
           break;
         case '>':
           prev = REDIR_O;
@@ -83,7 +83,59 @@ main(void)
           close(fd); // Close file
         }
       } else if (file < 0) { // Input redirection
-        
+        file = -file; // Original args less than file
+        char buf2[80]; // Hold line of input chars
+        memset(buf2, '\0', sizeof buf2);
+        fd = open(line[file], O_RDONLY);
+        if (fork() == 0) {
+          close(0);
+          dup(fd);
+          gets(buf2, sizeof buf2);
+          buf2[strlen(buf2)-1] = '\0';
+          while (buf2[0] != '\0') {
+            printf("Start\n");
+            printf("input: %s", buf2);
+            if (fork() == 0) {
+              int k = 0;
+              int prev = START;
+              // Create array of string args
+              while (buf2[k++] != 0) {
+                if (buf2[k-1] == ' ') {
+                  if (prev == SPACE || prev == NEWLINE) continue;
+                  prev = SPACE;
+                  buf2[k-1] = '\0';
+                } else if (buf2[k-1] == '\n') {
+                  if (prev == SPACE || prev == NEWLINE) continue;
+                  prev = NEWLINE;
+                } else {
+                  if (prev == CHAR) continue;
+                  line[file++] = &buf2[k-1];
+                  prev = CHAR;
+                }
+              }
+              /*
+              printf("Printing line\n");
+              int g = 0;
+              while (line[g]) {
+                printf("|%s|\n", line[g++]);
+              }
+              */
+              exec(line[0], line);
+            } else {
+              wait(0);
+              buf2[0] = '\0';
+              gets(buf2, sizeof buf2);
+              if (strlen(buf2) <= 0) break;
+              buf2[strlen(buf2)-1] = '\0';
+            }
+          }
+          printf("Done child\n");
+          dup(0);
+        } else {
+          wait(0);
+          printf("here");
+          close(fd);
+        }
       } else { // No redirection
         exec(line[0], line);
       }
