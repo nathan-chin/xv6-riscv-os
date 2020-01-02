@@ -31,6 +31,7 @@ main(void)
     memset(line, '\0', sizeof line);
     printf("@ ");
     gets(buf, sizeof buf); // Read in the input line into buf
+    if (buf[0] == '\0') break;
     buf[strlen(buf) - 1] = '\0'; // Remove the newline character at the end
 
     //int p[2]; // Hold pipe fds
@@ -93,8 +94,6 @@ main(void)
           gets(buf2, sizeof buf2);
           buf2[strlen(buf2)-1] = '\0';
           while (buf2[0] != '\0') {
-            printf("Start\n");
-            printf("input: %s", buf2);
             if (fork() == 0) {
               int k = 0;
               int prev = START;
@@ -129,11 +128,9 @@ main(void)
               buf2[strlen(buf2)-1] = '\0';
             }
           }
-          printf("Done child\n");
           dup(0);
         } else {
           wait(0);
-          printf("here");
           close(fd);
         }
       } else { // No redirection
