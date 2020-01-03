@@ -11,6 +11,7 @@
 #define PIPE 4
 #define REDIR_I 5
 #define REDIR_O 6
+#define DONE 7
 
 void
 exec2pipe(int *p, char **args, int type, int n)
@@ -123,8 +124,6 @@ main(void)
   //int file[2]; // Holds index of file name. + if output, - if input
   int file;
   //int nFile; // Keep track of number of file
-  int p[2];
-  char execBuf[80];
 
   while (1) {
     prev = START;
@@ -139,6 +138,9 @@ main(void)
     if (buf[0] == '\0') break;
     buf[strlen(buf) - 1] = '\0'; // Remove the newline character at the end
     int flag = START;
+    int outInPipe = 0;
+    int p[2];
+    char execBuf[80];
 
     //int p[2]; // Hold pipe fds
 
@@ -147,37 +149,25 @@ main(void)
       switch (buf[i]) {
         case ' ':
           if (prev == SPACE || prev == NEWLINE) break;
+          //printf("SPACE");
           prev = SPACE;
           buf[i] = '\0';
-          break;
-        case '\n':
-          if (prev == SPACE || prev == NEWLINE) break;
-          prev = NEWLINE;
-          break;
-        case '|':
-          prev = PIPE;
-          flag = PIPE;
-          break;
-        case '<':
-          prev = REDIR_I;
-          flag = REDIR_I;
-          break;
-        case '>':
-          prev = REDIR_O;
-          flag = REDIR_O;
-          break;
-        default:
-          //printf("Char here\n");
-          if (prev == CHAR) break;
-          line[n++] = &buf[i];
-          prev = CHAR;
           if (flag == REDIR_O) {
+            flag = DONE;
+            //printf("OUT\n");
+            i++;
+            while (buf[i] == ' ' || buf[i] == '\n') i++;
+            line[n++] = &buf[i];
+            while (buf[i] != 0 && buf[i] != ' ' && buf[i] != '\n') i++;
+            buf[i] = '\0';
+            prev = SPACE;
             fd = open(line[n-1], O_CREATE|O_WRONLY);
             line[--n] = '\0'; // Don't include the file name in exec
-            memset(p, '\0', sizeof p);
-            //printf("%d %d\n", p[0], p[1]);
+            //memset(p, '\0', sizeof p);
             //printf("Exec with %d args\n", n);
-            exec2pipe(p, line, REDIR_O, n);
+            if (outInPipe == 0) { // Write to file from exec
+              exec2pipe(p, line, REDIR_O, n);
+            }
             //printf("%d %d\n", p[0], p[1]);
             memset(execBuf, '\0', sizeof execBuf);
             if (fork() == 0) {
@@ -200,45 +190,79 @@ main(void)
               exit(0);
             } else {
               wait(0);
+              outInPipe = 0;
               close(fd);
               close(p[0]);
-              close(p[1]);
+              //close(p[1]);
             }
           } else if (flag == REDIR_I) {
+            flag = DONE;
+            //printf("IN\n");
+            i++;
+            while (buf[i] == ' ' || buf[i] == '\n') i++;
+            line[n++] = &buf[i];
+            while (buf[i] != 0 && buf[i] != ' ' && buf[i] != '\n') i++;
+            buf[i] = '\0';
+            prev = SPACE;
             memset(p, '\0', sizeof p);
             exec2pipe(p, line, REDIR_I, n);
-            memset(execBuf, '\0', sizeof execBuf);
-            if (fork() == 0) {
-              close(0);
-              dup(p[0]); // Read from pipe
-              close(p[0]);
-              close(p[1]);
-              gets(execBuf, sizeof execBuf);
-              if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
-              execBuf[strlen(execBuf)-1] = '\0';
-              while (strlen(execBuf) > 0) {
-                printf("%s\n", execBuf);
-                execBuf[0] = '\0';
-                gets(execBuf, sizeof execBuf);
-                if (strlen(execBuf) <= 0) break;
-                execBuf[strlen(execBuf)-1] = '\0';
-              }
-              exit(0);
-            } else {
-              wait(0);
-              close(p[0]);
-              close(p[1]);
-            }
+            outInPipe = 1;
           }
+          break;
+        case '\n':
+          if (prev == SPACE || prev == NEWLINE) break;
+          prev = NEWLINE;
+          break;
+        case '|':
+          prev = PIPE;
+          flag = PIPE;
+          break;
+        case '<':
+          prev = REDIR_I;
+          flag = REDIR_I;
+          break;
+        case '>':
+          prev = REDIR_O;
+          flag = REDIR_O;
+          break;
+        default:
+          //printf("CHAR");
+          if (prev == CHAR) break;
+          line[n++] = &buf[i];
+          prev = CHAR;
         }
         i++;
       }
 
-    if (prev <= NEWLINE && flag == START) {
+    if (prev = CHAR && flag == START) {
       if (fork() == 0) {
         exec(line[0], line);
       } else {
         wait(0);
+      }
+    } else if (outInPipe == 1) {
+      //printf("IN PIPE AT END\n");
+      memset(execBuf, '\0', sizeof execBuf);
+      if (fork() == 0) {
+        close(0);
+        dup(p[0]); // Read from pipe
+        close(p[0]);
+        close(p[1]);
+        gets(execBuf, sizeof execBuf);
+        if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
+        execBuf[strlen(execBuf)-1] = '\0';
+        while (strlen(execBuf) > 0) {
+          printf("%s\n", execBuf);
+          execBuf[0] = '\0';
+          gets(execBuf, sizeof execBuf);
+          if (strlen(execBuf) <= 0) break;
+          execBuf[strlen(execBuf)-1] = '\0';
+        }
+        exit(0);
+      } else {
+        wait(0);
+        close(p[0]);
+        close(p[1]);
       }
     }
 
