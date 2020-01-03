@@ -16,6 +16,7 @@ void
 exec2pipe(int *p, char **args, int type, int n)
 {
   int fd;
+  char buf[80];
 
   // Execute with arguments
   if (type == REDIR_O) { // Output redirection
@@ -36,35 +37,39 @@ exec2pipe(int *p, char **args, int type, int n)
       close(p[1]);
     }
   } else if (type == REDIR_I) { // Input redirection
-    //printf("INPUT");
-    char buf2[80]; // Hold line of input chars
-    memset(buf2, '\0', sizeof buf2);
-    fd = open(args[n], O_RDONLY); // Read file so each exec uses a line
+    memset(buf, '\0', sizeof buf);
+    fd = open(args[--n], O_RDONLY); // Read file so each exec uses a line
+    args[n] = '\0'; // Don't include the file name in exec
     pipe(p);
     if (fork() == 0) {
       close(0);
       dup(fd); // Read input from file and not STDIN
+      close(1);
+      dup(p[1]); // Write output to pipe
       close(p[0]); // No reading from pipe yet
-      gets(buf2, sizeof buf2);
-      buf2[strlen(buf2)-1] = '\0';
-      while (buf2[0] != '\0') {
+      close(p[1]);
+      exec(args[0], args);
+      /*
+      gets(buf, sizeof buf);
+      buf[strlen(buf)-1] = '\0';
+      while (buf[0] != '\0') {
         if (fork() == 0) {
           close(1);
           dup(p[1]); // Write to pipe on exec instead of STDOUT
           int k = 0;
           int prev = START;
           // Create array of string args
-          while (buf2[k++] != 0) {
-            if (buf2[k-1] == ' ') {
+          while (buf[k++] != 0) {
+            if (buf[k-1] == ' ') {
               if (prev == SPACE || prev == NEWLINE) continue;
               prev = SPACE;
-              buf2[k-1] = '\0';
-            } else if (buf2[k-1] == '\n') {
+              buf[k-1] = '\0';
+            } else if (buf[k-1] == '\n') {
               if (prev == SPACE || prev == NEWLINE) continue;
               prev = NEWLINE;
             } else {
               if (prev == CHAR) continue;
-              args[n++] = &buf2[k-1];
+              args[n++] = &buf[k-1];
               prev = CHAR;
             }
           }
@@ -73,17 +78,19 @@ exec2pipe(int *p, char **args, int type, int n)
           wait(0);
           // Close pipes so no leaking
           close(p[0]);
-          close(p[1]);
-          buf2[0] = '\0';
-          gets(buf2, sizeof buf2);
-          if (strlen(buf2) <= 0) break;
-          buf2[strlen(buf2)-1] = '\0';
+          //close(p[1]);
+          buf[0] = '\0';
+          gets(buf, sizeof buf);
+          if (strlen(buf) <= 0) break;
+          buf[strlen(buf)-1] = '\0';
         }
       }
+      exit(0);
+      */
     } else {
       wait(0);
       // Close pipes so no leaking
-      close(p[0]);
+      //close(p[0]);
       close(p[1]);
       close(fd); // Close opened file
     }
@@ -181,6 +188,7 @@ main(void)
               close(p[0]);
               close(p[1]);
               gets(execBuf, sizeof execBuf);
+              if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
               execBuf[strlen(execBuf)-1] = '\0';
               while (strlen(execBuf) > 0) {
                 printf("%s\n", execBuf);
@@ -197,22 +205,16 @@ main(void)
               close(p[1]);
             }
           } else if (flag == REDIR_I) {
-            fd = open(line[n-1], O_RDONLY);
-            line[--n] = '\0'; // Don't include the file name in exec
             memset(p, '\0', sizeof p);
-            //printf("%d %d\n", p[0], p[1]);
-            //printf("Exec with %d args\n", n);
             exec2pipe(p, line, REDIR_I, n);
-            //printf("%d %d\n", p[0], p[1]);
             memset(execBuf, '\0', sizeof execBuf);
             if (fork() == 0) {
               close(0);
               dup(p[0]); // Read from pipe
-              close(1);
-              dup(fd); // Output to file
               close(p[0]);
               close(p[1]);
               gets(execBuf, sizeof execBuf);
+              if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
               execBuf[strlen(execBuf)-1] = '\0';
               while (strlen(execBuf) > 0) {
                 printf("%s\n", execBuf);
@@ -224,7 +226,6 @@ main(void)
               exit(0);
             } else {
               wait(0);
-              close(fd);
               close(p[0]);
               close(p[1]);
             }
