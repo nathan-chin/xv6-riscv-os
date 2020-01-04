@@ -18,6 +18,7 @@ exec2pipe(int *p, char **args, int type, int n)
 {
   int fd;
   char buf[80];
+  //printf("Executing with type %d\n", type);
 
   // Execute with arguments
   if (type == REDIR_O) { // Output redirection
@@ -95,18 +96,75 @@ exec2pipe(int *p, char **args, int type, int n)
       close(p[1]);
       close(fd); // Close opened file
     }
-  } else { // No redirection
-    //printf("REDIR");
-    pipe(p);
+  } else { // Pipe
+    //printf("Piping hot\n");
+    int p2[2];
+    //pipe(p);
+    pipe(p2);
     if (fork() == 0) {
+      close(0);
+      dup(p[0]);
+      //printf("%d %d | %d %d", p[0], p[1], p2[0], p2[1]);
       close(p[0]); // Close read end so no leaking
       close(1);
-      dup(p[1]); // Write to pipe instead of STDOUT
+      dup(p2[1]); // Write to pipe instead of STDOUT
+      close(p[1]);
+      close(p2[0]);
+      close(p2[1]);
       exec(args[0], args);
     } else {
       wait(0);
-      // Close write end of pipe so no leaking
-      close(p[1]);
+      char bug[80];
+      //close(p[1]);
+      pipe(p);
+      if (fork() == 0) {
+        close(0);
+        dup(p2[0]);
+        close(1);
+        dup(p[1]);
+        close(p[0]);
+        close(p[1]);
+        close(p2[0]);
+        close(p2[1]);
+        gets(bug, sizeof bug);
+        printf("%s\n", bug);
+        exit(0);
+      } else {
+        wait(0);
+        close(p[1]);
+        close(p2[0]);
+        close(p2[1]);
+      }
+      //close(p2[1]);
+      /*
+      memset(buf, '\0', sizeof buf);
+      if (fork() == 0) {
+        close(0);
+        dup(p2[0]); // Read from pipe
+        //close(1);
+        //dup(p[0]);
+        close(p[0]);
+        close(p[1]);
+        close(p2[0]);
+        close(p2[1]);
+        gets(buf, sizeof buf);
+        if (strlen(buf) <= 0) exit(0); // Exit on no pipe read
+        buf[strlen(buf)-1] = '\0';
+        while (strlen(buf) > 0) {
+          printf("|%s|\n", buf);
+          buf[0] = '\0';
+          gets(buf, sizeof buf);
+          if (strlen(buf) <= 0) break;
+          buf[strlen(buf)-1] = '\0';
+        }
+        exit(0);
+      } else {
+        wait(0);
+        //close(p[0]);
+        //close(p[1]);
+        //close(p2[1]);
+      }*/
+      //printf("done exec\n");
     }
   }
 }
@@ -207,6 +265,25 @@ main(void)
             memset(p, '\0', sizeof p);
             exec2pipe(p, line, REDIR_I, n);
             outInPipe = 1;
+          } else if (flag == PIPE) {
+            //printf("outInPipe: %d\n", outInPipe);
+            //printf("PIPE OUT\n");
+            char *tempNext;
+            i++;
+            while (buf[i] == ' ' || buf[i] == '\n') i++;
+            line[n++] = &buf[i];
+            tempNext = &buf[i];
+            while (buf[i] != 0 && buf[i] != ' ' && buf[i] != '\n') i++;
+            buf[i] = '\0';
+            prev = SPACE;
+            line[--n] = '\0'; // Don't include the file name in exec
+            if (outInPipe == 0) {
+              exec2pipe(p, line, REDIR_O, n);
+              outInPipe = 1;
+            }
+            i = 0;
+            memset(line, 0, sizeof line);
+            line[i++] = tempNext;
           }
           break;
         case '\n':
@@ -242,6 +319,13 @@ main(void)
       }
     } else if (outInPipe == 1) {
       //printf("IN PIPE AT END\n");
+      if (flag == PIPE) {
+        //int h = 0;
+        //while (line[h]) {
+        //  printf("end args: %s\n", line[h++]);
+        //}
+        exec2pipe(p, line, PIPE, n);
+      }
       memset(execBuf, '\0', sizeof execBuf);
       if (fork() == 0) {
         close(0);
@@ -249,6 +333,7 @@ main(void)
         close(p[0]);
         close(p[1]);
         gets(execBuf, sizeof execBuf);
+        //printf("execBuf %s", execBuf);
         if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
         execBuf[strlen(execBuf)-1] = '\0';
         while (strlen(execBuf) > 0) {
@@ -262,7 +347,7 @@ main(void)
       } else {
         wait(0);
         close(p[0]);
-        close(p[1]);
+        //close(p[1]);
       }
     }
 
