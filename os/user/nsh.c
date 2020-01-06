@@ -8,80 +8,102 @@
 #define CHAR 1
 #define SPACE 2
 #define NEWLINE 3
-#define PIPE 4
-#define PIPE_2 5
+#define PIPE 4 // Output stage of pipe
+#define PIPE_2 5 // Input stage of pipe
 #define REDIR_I 6
 #define REDIR_O 7
 #define DONE 8
 
+/**
+ * Executes code, then writes the output to a pipe for later use
+ * Accounts for redirection in output and input, then piping
+ * @param *p: an array of at least 2 to hold pipe fds
+ * @param **args: an array of string arguments for execution
+ * @param type: describes type of execution (redir, pipe)
+ * @param n: the number of arguments
+ */
 void
 exec2pipe(int *p, char **args, int type, int n)
 {
-  int fd;
+  // Initialize temp buffer for grabbing from STDIN
   char buf[80];
   memset(buf, '\0', sizeof buf);
 
-  // Execute with arguments
   if (type == REDIR_O) { // Output redirection
     pipe(p);
-    if (fork() == 0) {
+    if (fork() == 0) { // Child executes and outputs to pipe
+      // Write to pipe on exec instead of STDOUT
       close(1);
-      dup(p[1]); // Write to pipe on exec instead of STDOUT
+      dup(p[1]);
+      // Close pipe ends so no leaks
       close(p[0]);
       close(p[1]);
       exec(args[0], args);
-    } else {
+    } else { // Parent will have data to read on pipe
       wait(0);
-      // Close write end of the pipe so no leaking, keep read end open
+      // Close write end of the pipe so no leaking, keep read end open bc data
       close(p[1]);
     }
   } else if (type == REDIR_I) { // Input redirection
-    memset(buf, '\0', sizeof buf);
-    fd = open(args[--n], O_RDONLY); // Read file so each exec uses a line
+    int fd = open(args[--n], O_RDONLY); // Read file so each exec uses a line
     args[n] = '\0'; // Don't include the file name in exec
     pipe(p);
-    if (fork() == 0) {
+    if (fork() == 0) { // Child executes and outputs to pipe
+      // Read input from file and not STDIN
       close(0);
-      dup(fd); // Read input from file and not STDIN
+      dup(fd);
+      // Write output to pipe on exec instead of STDOUT
       close(1);
-      dup(p[1]); // Write output to pipe
-      close(p[0]); // No reading from pipe yet
+      dup(p[1]);
+      // Close pipe ends so no leaks
+      close(p[0]);
       close(p[1]);
       exec(args[0], args);
-    } else {
+    } else { // Parent will have data to read on pipe
       wait(0);
-      // Close pipes so no leaking
+      // Close write end of pipe so no leaking, keep read end open bc data
       close(p[1]);
       close(fd); // Close opened file
     }
   } else { // Pipe
+    // Open second pipe as a buffer so we can write back to the original pipe
     int p2[2];
     pipe(p2);
-    if (fork() == 0) {
+    if (fork() == 0) { // Child execs from 1st pipe to exec output to 2ns pipe
+      // Read input from 1st pipe and not STDIN
       close(0);
       dup(p[0]);
-      close(p[0]); // Close read end so no leaking
+      // Write output to 2nd pipe and not STDOUT
       close(1);
-      dup(p2[1]); // Write to pipe instead of STDOUT
+      dup(p2[1]);
+      // Close pipe ends so no leaking
+      close(p[0]); 
       close(p[1]);
       close(p2[0]);
       close(p2[1]);
       exec(args[0], args);
-    } else {
+    } else { 
       wait(0);
-      memset(buf, '\0', sizeof buf);
-      close(p2[1]);
+      memset(buf, '\0', sizeof buf); // Reset buf for use again
+      // Close previously used pipe ends
       close(p[0]);
+      close(p2[1]);
       pipe(p);
       if (fork() == 0) {
+        // Read input from 2nd pipe and not STDIN
         close(0);
         dup(p2[0]);
+        // Write output to 1st pipe and not STDOUT, so p[0] can be read
+        // consistently
         close(1);
         dup(p[1]);
+        // Close pipe ends so no leaking
         close(p[0]);
         close(p[1]);
         close(p2[0]);
         close(p2[1]);
+        
+        // Read each line from 2nd pipe and write to 1st pipe
         gets(buf, sizeof buf);
         if (strlen(buf) <= 0) exit(0); // Exit on no pipe read
         while (strlen(buf) > 0) {
@@ -90,9 +112,11 @@ exec2pipe(int *p, char **args, int type, int n)
           gets(buf, sizeof buf);
           if (strlen(buf) <= 0) break;
         }
+
         exit(0);
       } else {
         wait(0);
+        // Close all 2nd pipe ends and write end of 1st pipe so no leaking
         close(p[1]);
         close(p2[0]);
         close(p2[1]);
