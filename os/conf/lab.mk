@@ -1,1 +1,1 @@
-LAB=mmap
+LAB=sh
