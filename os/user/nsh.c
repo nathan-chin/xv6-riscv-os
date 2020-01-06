@@ -9,9 +9,10 @@
 #define SPACE 2
 #define NEWLINE 3
 #define PIPE 4
-#define REDIR_I 5
-#define REDIR_O 6
-#define DONE 7
+#define PIPE_2 5
+#define REDIR_I 6
+#define REDIR_O 7
+#define DONE 8
 
 void
 exec2pipe(int *p, char **args, int type, int n)
@@ -266,6 +267,7 @@ main(void)
             exec2pipe(p, line, REDIR_I, n);
             outInPipe = 1;
           } else if (flag == PIPE) {
+            flag = PIPE_2;
             //printf("outInPipe: %d\n", outInPipe);
             //printf("PIPE OUT\n");
             char *tempNext;
@@ -281,9 +283,65 @@ main(void)
               exec2pipe(p, line, REDIR_O, n);
               outInPipe = 1;
             }
-            i = 0;
+            n = 0;
             memset(line, 0, sizeof line);
-            line[i++] = tempNext;
+            line[n++] = tempNext;
+          } else if (flag == PIPE_2) {
+            exec2pipe(p, line, PIPE, n);
+            memset(execBuf, '\0', sizeof execBuf);
+            char execBuf[80];
+            int p2[2];
+            pipe(p2);
+            if (fork() == 0) {
+              close(0);
+              dup(p[0]); // Read from pipe
+              close(p[0]);
+              close(1);
+              dup(p2[1]);
+              close(p[1]);
+              close(p2[0]);
+              close(p2[1]);
+              gets(execBuf, sizeof execBuf);
+              if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
+              execBuf[strlen(execBuf)-1] = '\0';
+              while (strlen(execBuf) > 0) {
+                printf("%s\n", execBuf);
+                execBuf[0] = '\0';
+                gets(execBuf, sizeof execBuf);
+                if (strlen(execBuf) <= 0) break;
+                execBuf[strlen(execBuf)-1] = '\0';
+              }
+              exit(0);
+            } else {
+              wait(0);
+              pipe(p);
+              if (fork() == 0) {
+                close(0);
+                dup(p2[0]);
+                close(1);
+                dup(p[1]);
+                close(p[0]);
+                close(p[1]);
+                close(p2[0]);
+                close(p2[1]);
+                gets(execBuf, sizeof execBuf);
+                if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
+                execBuf[strlen(execBuf)-1] = '\0';
+                while (strlen(execBuf) > 0) {
+                  printf("%s\n", execBuf);
+                  execBuf[0] = '\0';
+                  gets(execBuf, sizeof execBuf);
+                  if (strlen(execBuf) <= 0) break;
+                  execBuf[strlen(execBuf)-1] = '\0';
+                }
+                exit(0);
+              } else {
+                wait(0);
+                close(p[1]);
+                close(p2[0]);
+                close(p2[1]);
+              }
+            }
           }
           break;
         case '\n':
@@ -301,6 +359,63 @@ main(void)
         case '>':
           prev = REDIR_O;
           flag = REDIR_O;
+            exec2pipe(p, line, PIPE, n);
+            memset(execBuf, '\0', sizeof execBuf);
+            char execBuf[80];
+            int p2[2];
+            pipe(p2);
+            if (fork() == 0) {
+              close(0);
+              dup(p[0]); // Read from pipe
+              close(p[0]);
+              close(1);
+              dup(p2[1]);
+              close(p[1]);
+              close(p2[0]);
+              close(p2[1]);
+              gets(execBuf, sizeof execBuf);
+              if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
+              execBuf[strlen(execBuf)-1] = '\0';
+              while (strlen(execBuf) > 0) {
+                printf("%s\n", execBuf);
+                execBuf[0] = '\0';
+                gets(execBuf, sizeof execBuf);
+                if (strlen(execBuf) <= 0) break;
+                execBuf[strlen(execBuf)-1] = '\0';
+              }
+              exit(0);
+            } else {
+              wait(0);
+              close(p2[1]);
+              memset(execBuf, 0, sizeof execBuf);
+              pipe(p);
+              if (fork() == 0) {
+                close(0);
+                dup(p2[0]);
+                close(1);
+                dup(p[1]);
+                close(p[0]);
+                close(p[1]);
+                close(p2[0]);
+                close(p2[1]);
+                gets(execBuf, sizeof execBuf);
+                if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
+                execBuf[strlen(execBuf)-1] = '\0';
+                while (strlen(execBuf) > 0) {
+                  printf("%s\n", execBuf);
+                  execBuf[0] = '\0';
+                  gets(execBuf, sizeof execBuf);
+                  if (strlen(execBuf) <= 0) break;
+                  execBuf[strlen(execBuf)-1] = '\0';
+                }
+                exit(0);
+              } else {
+                wait(0);
+                close(p[1]);
+                close(p2[0]);
+                close(p2[1]);
+              }
+            }
           break;
         default:
           //printf("CHAR");
@@ -319,7 +434,7 @@ main(void)
       }
     } else if (outInPipe == 1) {
       //printf("IN PIPE AT END\n");
-      if (flag == PIPE) {
+      if (flag == PIPE_2) {
         //int h = 0;
         //while (line[h]) {
         //  printf("end args: %s\n", line[h++]);
