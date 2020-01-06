@@ -134,14 +134,14 @@ main(void)
   int prev; // Hold identification of previous read char
   int i; // Keep track of position in buf
   int n; // Keep track of number of words made
-  int fd; // File redirection fd
-  int flag;
-  int outInPipe;
-  int p[2];
-  char execBuf[80];
-  char *tempNext;
+  int fd; // File redirection fd for read/written files
+  int flag; // Notifies of special symbols in line parsing
+  int outInPipe; // Indicate presence of data in pipe to use as input for exec
+  int p[2]; // Holds pipe file descriptors, p[0] consistently kept open for use
+  char execBuf[80]; // Second buffer to hold parsed data
 
-  while (1) {
+  while (1) { // Every loop is a line of STNDIN read in
+    // Initialize variables
     prev = START;
     i = 0;
     n = 0;
@@ -151,7 +151,7 @@ main(void)
     memset(line, '\0', sizeof line);
     memset(p, '\0', sizeof p);
     memset(execBuf, '\0', sizeof execBuf);
-    printf("@ ");
+    printf("@ "); // Prompt symbol
     gets(buf, sizeof buf); // Read in the input line into buf
     if (buf[0] == '\0') break;
     buf[strlen(buf) - 1] = '\0'; // Remove the newline character at the end
@@ -163,27 +163,38 @@ main(void)
           if (prev == SPACE || prev == NEWLINE) break;
           prev = SPACE;
           buf[i] = '\0';
+          // After symbols have been flagged, execute into pipe as needed
           if (flag == REDIR_O) {
-            flag = DONE;
+            flag = DONE; // Reset flag after spotted
+            
+            // Ignore extra spaces or lines
             i++;
             while (buf[i] == ' ' || buf[i] == '\n') i++;
             line[n++] = &buf[i];
+            // Read all of next word found
             while (buf[i] != 0 && buf[i] != ' ' && buf[i] != '\n') i++;
             buf[i] = '\0';
             prev = SPACE;
-            fd = open(line[n-1], O_CREATE|O_WRONLY);
+
+            fd = open(line[n-1], O_CREATE|O_WRONLY); // Open file for writing
             line[--n] = '\0'; // Don't include the file name in exec
-            if (outInPipe == 0) { // Write to file from exec
+            // Need output should always be in p[0]. Exec2pipe if none in pipe
+            if (outInPipe == 0) {
               exec2pipe(p, line, REDIR_O, n);
             }
             memset(execBuf, '\0', sizeof execBuf);
             if (fork() == 0) {
+              // Read from pipe instead of STDIN
               close(0);
-              dup(p[0]); // Read from pipe
+              dup(p[0]);
+              // Write to file instead of STDOUT
               close(1);
-              dup(fd); // Output to file
+              dup(fd);
+              // Close pipe ends to prevent leaking
               close(p[0]);
               close(p[1]);
+
+              // Read each line from pipe and write to file
               gets(execBuf, sizeof execBuf);
               if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
               while (strlen(execBuf) > 0) {
@@ -195,36 +206,48 @@ main(void)
               exit(0);
             } else {
               wait(0);
-              close(p[1]);
+              // Output in file, no longer in pipe
               outInPipe = 0;
+              // Close fds so we don't run out
               close(fd);
               close(p[0]);
+              close(p[1]);
             }
           } else if (flag == REDIR_I) {
-            flag = DONE;
+            flag = DONE; // Reset flag after spotted
+
+            // Ignore extra spaces or lines
             i++;
             while (buf[i] == ' ' || buf[i] == '\n') i++;
             line[n++] = &buf[i];
+            // Read all of next word found
             while (buf[i] != 0 && buf[i] != ' ' && buf[i] != '\n') i++;
             buf[i] = '\0';
             prev = SPACE;
             memset(p, '\0', sizeof p);
+            // Exec with input from opened file, out to pipe
             exec2pipe(p, line, REDIR_I, n);
             outInPipe = 1;
           } else if (flag == PIPE) {
-            flag = PIPE_2;
+            char *tempNext; // Point to word after pipe char
+            flag = PIPE_2; // Must perform input half of pipe afterwards
+
+            // Ignore extra spaces or lines
             i++;
             while (buf[i] == ' ' || buf[i] == '\n') i++;
             line[n++] = &buf[i];
             tempNext = &buf[i];
+            // Read all of next word found
             while (buf[i] != 0 && buf[i] != ' ' && buf[i] != '\n') i++;
             buf[i] = '\0';
             prev = SPACE;
             line[--n] = '\0'; // Don't include the file name in exec
+            // Use previous exec data if in pipe, or exec
             if (outInPipe == 0) {
               exec2pipe(p, line, REDIR_O, n);
               outInPipe = 1;
             }
+            // Reset input line args
             n = 0;
             memset(line, 0, sizeof line);
             line[n++] = tempNext;
@@ -244,6 +267,7 @@ main(void)
           break;
         case '>':
           prev = REDIR_O;
+          // If output after pipe, need to exec one more time with new cmd
           if (flag == PIPE_2) {
             exec2pipe(p, line, PIPE, n);
           }
@@ -257,22 +281,28 @@ main(void)
         i++;
       }
 
+    // Handle execution with no special chars
     if (prev == CHAR && flag == START) {
       if (fork() == 0) {
         exec(line[0], line);
       } else {
         wait(0);
       }
-    } else if (outInPipe == 1) {
+    } else if (outInPipe == 1) { // If final output in pipe, out to STDOUT
+      // Exec on previous exec output
       if (flag == PIPE_2) {
         exec2pipe(p, line, PIPE, n);
       }
       memset(execBuf, '\0', sizeof execBuf);
       if (fork() == 0) {
+        // Read from pipe not from STDIN
         close(0);
-        dup(p[0]); // Read from pipe
+        dup(p[0]);
+        // Close pipe ends so no leaking
         close(p[0]);
         close(p[1]);
+
+        // Read each line from pipe and write to STDOUT
         gets(execBuf, sizeof execBuf);
         if (strlen(execBuf) <= 0) exit(0); // Exit on no pipe read
         while (strlen(execBuf) > 0) {
@@ -284,6 +314,7 @@ main(void)
         exit(0);
       } else {
         wait(0);
+        // Close both ends of pipe
         close(p[0]);
         close(p[1]);
       }
